@@ -17,6 +17,10 @@ object ExactDirDupFinder {
 
   val logfile = new PrintStream("target/dups.log")
 
+  val ignorePattern = """target|\.classpath|\.project|\.settings|\.idea""".r.pattern
+
+  def ignorePredicate(p: Path): Boolean = ignorePattern.matcher(p.getFileName.toString).matches()
+
   def write(msg: Any) = {
     println(msg)
     logfile.println(msg)
@@ -40,9 +44,12 @@ object ExactDirDupFinder {
     var hasError = false
     var cumulativeSize = 0L
     if (Files.isDirectory(path)) {
+      println("Processing " + path)
       val contents = new StringBuilder
       val children: Array[Path] = Files.newDirectoryStream(path).iterator().toArray
-      children foreach { child =>
+      val ignored = children filter ignorePredicate
+      if (!ignored.isEmpty) println("Ignoring " + ignored.mkString(" "))
+      children filterNot ignorePredicate foreach { child =>
         try {
           val childInfo = processPath(child)
           if (!childInfo.error) {
