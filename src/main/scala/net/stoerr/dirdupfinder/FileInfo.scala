@@ -1,7 +1,7 @@
 package net.stoerr.dirdupfinder
 
-import java.nio.ByteBuffer
-import java.nio.file.{Files, Path, StandardOpenOption}
+import java.io.FileInputStream
+import java.nio.file.{Files, Path}
 import java.security.MessageDigest
 
 import sun.misc.BASE64Encoder
@@ -15,11 +15,11 @@ object FileInfo {
 
   private val sha1 = MessageDigest.getInstance("SHA-1")
   private val b64 = new BASE64Encoder()
-  private val buf = ByteBuffer.allocate(1024 * 1024)
+  private val buf: Array[Byte] = Array.fill(1024 * 1024)(0)
 
   def digestString(string: String): String = {
     sha1.reset()
-    return b64.encode(sha1.digest(string.getBytes("UTF-8")))
+    b64.encode(sha1.digest(string.getBytes("UTF-8")))
   }
 
   def sizeAndDigest(path: Path): (Long, String) = (Files.size(path), digest(path))
@@ -27,17 +27,17 @@ object FileInfo {
   def digest(path: Path): String = {
     sha1.reset()
     // return b64.encode(sha1.digest(Files.readAllBytes(file.toPath)))
-    val channel = Files.newByteChannel(path, StandardOpenOption.READ)
-    buf.clear()
-    var bytesRead: Int = channel.read(buf)
-    while (bytesRead > 0) {
-      buf.flip()
-      sha1.update(buf)
-      buf.clear()
-      bytesRead = channel.read(buf)
+    val stream = new FileInputStream(path.toFile)
+    try {
+      var bytesRead: Int = stream.read(buf)
+      while (bytesRead > 0) {
+        sha1.update(buf, 0, bytesRead)
+        bytesRead = stream.read(buf)
+      }
+      b64.encode(sha1.digest())
+    } finally {
+      stream.close()
     }
-    channel.close()
-    b64.encode(sha1.digest())
   }
 
 }
