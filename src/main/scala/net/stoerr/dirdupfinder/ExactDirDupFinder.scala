@@ -33,8 +33,11 @@ object ExactDirDupFinder {
     val argumentPaths = args.sorted.map(f => FileSystems.getDefault.getPath(f))
     argumentPaths foreach processPath
     write("\n\n\nSTART DUPS\n\n")
-    val groupedInfos = path2hash groupBy (_._2) filter (_._2.size > 1) mapValues (_.keys.toList.sorted)
-    groupedInfos.toArray.sortBy(i => (-i._1.size, i._1.digest)) foreach { case (hash, paths) =>
+    val groupedInfos: Map[ChildInfo, List[Path]] = path2hash groupBy (_._2) filter (_._2.size > 1) mapValues (_.keys.toList.sorted)
+    val childrenRemoved = filterChildren(groupedInfos,
+      (p: (ChildInfo, List[Path]), c: (ChildInfo, List[Path])) =>
+        containsOnlyChildren(p._2, c._2, isPrefixOf))
+    childrenRemoved.toArray.sortBy(i => (-i._1.size, i._1.digest)) foreach { case (hash, paths) =>
       write(hash + " : ")
       paths foreach write
       write("\n")
@@ -74,6 +77,19 @@ object ExactDirDupFinder {
       val fileInfo = FileInfo.sizeAndDigest(path)
       return ChildInfo(false, fileInfo._1, fileInfo._2)
     }
+  }
+
+  def isPrefixOf(parent: Path, child: Path) = child.startsWith(parent)
+
+  def containsOnlyChildren[T](parents: List[T], children: List[T], parentChild: (T, T) => Boolean): Boolean = {
+    children.forall(c => parents.exists(p => parentChild(p, c)))
+  }
+
+  def filterChildren[T](elems: TraversableOnce[T], parentChild: (T, T) => Boolean): List[T] = {
+    def insertAndFilter(next: T, firsts: List[T]): List[T] =
+      firsts.filterNot(parentChild(next, _)) ++
+        List(next).filterNot(c => firsts.exists(parentChild(_, next)))
+    elems.foldRight(List.empty[T])(insertAndFilter)
   }
 
   case class ChildInfo(error: Boolean, size: Long, digest: String) {
